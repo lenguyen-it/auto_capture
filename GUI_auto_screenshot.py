@@ -9,7 +9,6 @@ import ctypes
 from ctypes import windll
 from datetime import datetime, timedelta
 import threading
-import psutil
 
 
 import tkinter as tk
@@ -38,6 +37,7 @@ def is_window_cloaked(hwnd):
 # --- HÀM LỌC CỬA SỔ TRÊN TASKBAR ---
 def get_all_visible_windows():
     windows_list = []
+    self_hwnd = root.winfo_id()
 
     def enum_windows_callback(temp_hwnd, extra):
         # 1. Phải có flag visible
@@ -56,6 +56,9 @@ def get_all_visible_windows():
         # 4. Loại bỏ cửa sổ bị "cloaked" — ẩn bởi hệ thống
         #    (UWP apps trên virtual desktop khác, Windows Store apps chạy nền, v.v.)
         if is_window_cloaked(temp_hwnd):
+            return True
+        
+        if temp_hwnd == self_hwnd:
             return True
 
         ex_style = win32gui.GetWindowLong(temp_hwnd, win32con.GWL_EXSTYLE)
@@ -262,6 +265,7 @@ def refresh_windows():
 
 # --- THIẾT KẾ GIAO DIỆN ---
 root = tk.Tk()
+self_hwnd = None
 root.title("Tự Động Chụp Màn Hình Cửa Sổ")
 root.geometry("520x340")
 root.resizable(True, True)
