@@ -269,7 +269,7 @@ root.resizable(True, True)
 # Chọn cửa sổ cần chụp
 lbl1 = tk.Label(
     root,
-    text="Chọn cửa sổ muốn chụp:",
+    text="Chọn cửa sổ muốn chụp (chỉ cửa sổ hiển thị không bị ẩn) :",
     font=("Arial", 10, "bold"),
 )
 lbl1.pack(anchor="w", padx=15, pady=5)
@@ -290,7 +290,7 @@ btn_refresh.pack(side="right", padx=5)
 # save_folder = "screenshots"
 save_folder = os.path.abspath("screenshots")
 lbl_folder_title = tk.Label(
-    root, text="Chọn folder muốn lưu ảnh chụp:", font=("Arial", 10, "bold")
+    root, text="Chọn folder muốn lưu ảnh:", font=("Arial", 10, "bold")
 )
 lbl_folder_title.pack(anchor="w", padx=15, pady=5)
 
@@ -316,7 +316,7 @@ btn_folder.pack(side="right")
 # Thời gian bắt đầu
 lbl2 = tk.Label(
     root,
-    text="Thời gian bắt đầu lịch trình (Định dạng Giờ:Phút:Giây):",
+    text="Thời gian bắt đầu (Định dạng Giờ:Phút:Giây):",
     font=("Arial", 10, "bold"),
 )
 lbl2.pack(anchor="w", padx=15, pady=5)
@@ -327,9 +327,7 @@ entry_start_time.insert(0, default_start)
 entry_start_time.pack(fill="x", padx=15)
 
 # Thời gian chụp mỗi lần + Đơn vị lựa chọn
-lbl3 = tk.Label(
-    root, text="Khoảng cách giữa các lần chụp định kỳ:", font=("Arial", 10, "bold")
-)
+lbl3 = tk.Label(root, text="Khoảng cách giữa các lần chụp:", font=("Arial", 10, "bold"))
 lbl3.pack(anchor="w", padx=15, pady=5)
 
 frame_time = tk.Frame(root)
