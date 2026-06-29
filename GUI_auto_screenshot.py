@@ -167,8 +167,8 @@ def start_schedule_loop(hwnd, title, start_time_str, interval_val, unit, base_fo
         print(f"Đã kích hoạt lịch chụp tự động!")
         print(f"Cửa sổ mục tiêu: '{title}'")
 
-        print("[KÍCH HOẠT] Thực hiện phát chụp đầu tiên ngay lập tức...")
-        capture_window_by_hwnd(hwnd, title, base_folder, file_prefix="cap_KICHHOAT")
+        print("[Start] Thực hiện phát chụp đầu tiên ngay lập tức...")
+        capture_window_by_hwnd(hwnd, title, base_folder, file_prefix="cap_Start")
 
         print(
             f"Phát chụp định kỳ tiếp theo sẽ vào lúc: {target_time.strftime('%H:%M:%S')}"
@@ -269,7 +269,7 @@ root.resizable(True, True)
 # Chọn cửa sổ cần chụp
 lbl1 = tk.Label(
     root,
-    text="Chọn cửa sổ muốn chụp (Chỉ ứng dụng đang mở công khai):",
+    text="Chọn cửa sổ muốn chụp:",
     font=("Arial", 10, "bold"),
 )
 lbl1.pack(anchor="w", padx=15, pady=5)
