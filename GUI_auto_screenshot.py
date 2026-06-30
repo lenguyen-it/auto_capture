@@ -37,9 +37,14 @@ def is_window_cloaked(hwnd):
 # --- HÀM LỌC CỬA SỔ TRÊN TASKBAR ---
 def get_all_visible_windows():
     windows_list = []
-    self_hwnd = root.winfo_id()
+    current_pid = os.getpid()
 
     def enum_windows_callback(temp_hwnd, extra):
+        # Lọc bỏ ứng dụng chụp
+        _, pid = win32process.GetWindowThreadProcessId(temp_hwnd)
+        if pid == current_pid:
+            return True
+
         # 1. Phải có flag visible
         if not win32gui.IsWindowVisible(temp_hwnd):
             return True
@@ -56,9 +61,6 @@ def get_all_visible_windows():
         # 4. Loại bỏ cửa sổ bị "cloaked" — ẩn bởi hệ thống
         #    (UWP apps trên virtual desktop khác, Windows Store apps chạy nền, v.v.)
         if is_window_cloaked(temp_hwnd):
-            return True
-
-        if temp_hwnd == self_hwnd:
             return True
 
         ex_style = win32gui.GetWindowLong(temp_hwnd, win32con.GWL_EXSTYLE)
