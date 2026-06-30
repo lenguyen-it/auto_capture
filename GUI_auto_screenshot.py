@@ -57,7 +57,7 @@ def get_all_visible_windows():
         #    (UWP apps trên virtual desktop khác, Windows Store apps chạy nền, v.v.)
         if is_window_cloaked(temp_hwnd):
             return True
-        
+
         if temp_hwnd == self_hwnd:
             return True
 
@@ -252,6 +252,15 @@ def on_click_start():
     schedule_thread.start()
 
 
+def turn_off_monitor():
+    """Hàm xử lý sự kiện tắt màn hình bằng lệnh SendMessageW"""
+    try:
+        # Nó là tắt màn hình nhưng không tắt session, vẫn chạy ngầm
+        ctypes.windll.user32.SendMessageW(0xFFFF, 0x0112, 0xF170, 2)
+    except Exception as e:
+        messagebox.showerror("Lỗi", f"Không thể thực thi lệnh tắt màn hình: {e}")
+
+
 def refresh_windows():
     global windows_data
     windows_data = get_all_visible_windows()
@@ -353,16 +362,33 @@ lbl_status = tk.Label(
 )
 lbl_status.pack(pady=10)
 
+# --- KHU VỰC CÁC NÚT ĐIỀU KHIỂN ---
+frame_buttons = tk.Frame(root)
+frame_buttons.pack(fill="x", padx=40, pady=5)
+
 # --- NÚT KÍCH HOẠT ---
 btn_start = tk.Button(
-    root,
-    text="BẮT ĐẦU CHẠY",
-    font=("Arial", 12, "bold"),
+    frame_buttons,
+    text="BẮT ĐẦU",
+    font=("Arial", 11, "bold"),
     bg="green",
     fg="white",
     command=on_click_start,
+    width=22,
 )
-btn_start.pack(fill="x", padx=40, pady=5)
+btn_start.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+# Nút Tắt màn hình
+btn_lock = tk.Button(
+    frame_buttons,
+    text="TẮT MÀN HÌNH",
+    font=("Arial", 11, "bold"),
+    bg="#1f77b4",
+    fg="white",
+    command=turn_off_monitor,
+    width=20,
+)
+btn_lock.pack(side="right", fill="x", expand=True, padx=(5, 0))
 
 # Tạo dữ liệu ban đầu cho menu thả xuống
 refresh_windows()
