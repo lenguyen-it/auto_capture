@@ -274,11 +274,31 @@ def refresh_windows():
         cb_windows.set("Không tìm thấy cửa sổ nào phù hợp")
 
 
+def on_click_capture():
+    selected_idx = cb_windows.current()
+    if selected_idx == -1:
+        messagebox.showwarning("Cảnh báo", "Vui lòng chọn một cửa sổ để chụp!")
+        return
+
+    hwnd = windows_data[selected_idx][1]
+    title = windows_data[selected_idx][0]
+    folder = entry_folder.get().strip()
+
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+    threading.Thread(
+        target=capture_window_by_hwnd,
+        args=(hwnd, title, folder, "cap_manual"),
+        daemon=True
+    ).start()
+
+
 # --- THIẾT KẾ GIAO DIỆN ---
 root = tk.Tk()
 self_hwnd = None
 root.title("Tự Động Chụp Màn Hình Cửa Sổ")
-root.geometry("520x340")
+root.geometry("550x350")
 root.resizable(True, True)
 
 # Chọn cửa sổ cần chụp
@@ -385,12 +405,23 @@ btn_lock = tk.Button(
     frame_buttons,
     text="TẮT MÀN HÌNH",
     font=("Arial", 11, "bold"),
-    bg="#1f77b4",
+    bg="#5A6268",
     fg="white",
     command=turn_off_monitor,
     width=20,
 )
 btn_lock.pack(side="right", fill="x", expand=True, padx=(5, 0))
+
+# Nút chụp màn hình ngay lặp tức
+btn_capture_now = tk.Button(
+    root,
+    text="CHỤP NGAY",
+    font=("Arial", 12, "bold"),
+    bg="#1a6fc4",
+    fg="white",
+    command=on_click_capture,
+)
+btn_capture_now.pack(fill="x", padx=40, pady=5)
 
 # Tạo dữ liệu ban đầu cho menu thả xuống
 refresh_windows()
