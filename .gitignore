@@ -1,0 +1,4 @@
+/screenshots
+/GUI-screenshots
+__pycache__/
+*.pyc
