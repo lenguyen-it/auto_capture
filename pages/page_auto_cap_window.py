@@ -1,4 +1,5 @@
 import os
+import re
 import ctypes
 import threading
 import tkinter as tk
@@ -32,7 +33,7 @@ class PageAuto(tk.Frame):
         # --- Chọn cửa sổ ---
         tk.Label(
             self,
-            text="Chọn cửa sổ muốn chụp:",
+            text="Chọn cửa sổ muốn chụp (giữ Ctrl/Shift để chọn nhiều):",
             font=("Segoe UI", 10, "bold"),
             bg="#f5f5f5",
         ).pack(anchor="w", padx=15, pady=4)
@@ -40,8 +41,21 @@ class PageAuto(tk.Frame):
         frame_cb = tk.Frame(self, bg="#f5f5f5")
         frame_cb.pack(fill="x", padx=15)
 
-        self.cb_windows = ttk.Combobox(frame_cb, state="readonly", font=("Segoe UI", 9))
-        self.cb_windows.pack(side="left", fill="x", expand=True)
+        frame_list = tk.Frame(frame_cb, bg="#f5f5f5")
+        frame_list.pack(side="left", fill="x", expand=True)
+
+        scrollbar = tk.Scrollbar(frame_list, orient="vertical")
+        self.lb_windows = tk.Listbox(
+            frame_list,
+            selectmode="extended",
+            exportselection=False,
+            height=6,
+            font=("Segoe UI", 9),
+            yscrollcommand=scrollbar.set,
+        )
+        scrollbar.config(command=self.lb_windows.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.lb_windows.pack(side="left", fill="x", expand=True)
 
         tk.Button(
             frame_cb,
@@ -174,12 +188,20 @@ class PageAuto(tk.Frame):
 
     def refresh_windows(self):
         self.windows_data = get_all_visible_windows()
-        titles = [w[0] for w in self.windows_data]
-        self.cb_windows["values"] = titles
-        if titles:
-            self.cb_windows.current(0)
-        else:
-            self.cb_windows.set("Không tìm thấy cửa sổ nào phù hợp")
+        self.lb_windows.delete(0, tk.END)
+        for title, _ in self.windows_data:
+            self.lb_windows.insert(tk.END, title)
+        if self.windows_data:
+            self.lb_windows.selection_set(0)
+
+    def _get_selected_windows(self) -> list[tuple[str, int]]:
+        return [self.windows_data[i] for i in self.lb_windows.curselection()]
+
+    @staticmethod
+    def _safe_prefix(title: str, base: str = "cap") -> str:
+        """Tạo prefix file từ title để ảnh các cửa sổ không ghi đè lên nhau."""
+        safe = re.sub(r"[^\w\-]+", "_", title).strip("_")[:30]
+        return f"{base}_{safe}" if safe else base
 
     def _select_folder(self):
         folder = filedialog.askdirectory(title="Chọn thư mục lưu ảnh")
@@ -200,13 +222,13 @@ class PageAuto(tk.Frame):
             self.lbl_status.config(text="Trạng thái: Đang dừng", fg="#e53935")
             return
 
-        idx = self.cb_windows.current()
-        if idx == -1:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn một cửa sổ để chụp!")
+        targets = self._get_selected_windows()
+        if not targets:
+            messagebox.showwarning(
+                "Cảnh báo", "Vui lòng chọn ít nhất một cửa sổ để chụp!"
+            )
             return
 
-        hwnd = self.windows_data[idx][1]
-        title = self.windows_data[idx][0]
         start_time = self.entry_start_time.get().strip()
         unit = self.cb_unit.get()
 
@@ -222,16 +244,27 @@ class PageAuto(tk.Frame):
 
         self.is_running = True
         self.btn_start.config(text="DỪNG LẠI", bg="#c62828")
-        self.lbl_status.config(text=f"Đang chạy: {title[:35]}...", fg="#2e7d32")
+        if len(targets) == 1:
+            status = f"Đang chạy: {targets[0][0][:35]}..."
+        else:
+            status = f"Đang chạy: {len(targets)} cửa sổ"
+        self.lbl_status.config(text=status, fg="#2e7d32")
 
         self.schedule_thread = threading.Thread(
             target=self._schedule_loop,
-            args=(hwnd, title, start_time, interval, unit),
+            args=(targets, start_time, interval, unit),
             daemon=True,
         )
         self.schedule_thread.start()
 
-    def _schedule_loop(self, hwnd, title, start_time_str, interval_val, unit):
+    def _capture_all(self, targets: list[tuple[str, int]], base_prefix: str):
+        """Chụp lần lượt tất cả cửa sổ trong danh sách."""
+        for title, hwnd in targets:
+            capture_window_by_hwnd(
+                hwnd, title, self.save_folder, self._safe_prefix(title, base_prefix)
+            )
+
+    def _schedule_loop(self, targets, start_time_str, interval_val, unit):
         from datetime import datetime, timedelta
         import time
 
@@ -250,14 +283,15 @@ class PageAuto(tk.Frame):
                 while now > target:
                     target += delta
 
-            print(f"[Auto] Bắt đầu lịch chụp cho '{title}'")
-            capture_window_by_hwnd(hwnd, title, self.save_folder, "cap_Start")
+            names = ", ".join(f"'{t}'" for t, _ in targets)
+            print(f"[Auto] Bắt đầu lịch chụp cho {names}")
+            self._capture_all(targets, "cap_Start")
             print(f"[Auto] Lần chụp tiếp theo: {target.strftime('%H:%M:%S')}")
 
             while self.is_running:
                 now = datetime.now()
                 if now >= target:
-                    capture_window_by_hwnd(hwnd, title, self.save_folder)
+                    self._capture_all(targets, "cap")
                     target += delta
                     print(f"[Auto] Lịch tiếp theo: {target.strftime('%H:%M:%S')}")
                 time.sleep(0.5)
@@ -269,19 +303,19 @@ class PageAuto(tk.Frame):
             )
 
     def _on_click_capture(self):
-        idx = self.cb_windows.current()
-        if idx == -1:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn một cửa sổ để chụp!")
+        targets = self._get_selected_windows()
+        if not targets:
+            messagebox.showwarning(
+                "Cảnh báo", "Vui lòng chọn ít nhất một cửa sổ để chụp!"
+            )
             return
 
-        hwnd = self.windows_data[idx][1]
-        title = self.windows_data[idx][0]
-        folder = self.entry_folder.get().strip()
-        os.makedirs(folder, exist_ok=True)
+        self.save_folder = self.entry_folder.get().strip()
+        os.makedirs(self.save_folder, exist_ok=True)
 
         threading.Thread(
-            target=capture_window_by_hwnd,
-            args=(hwnd, title, folder, "cap_manual"),
+            target=self._capture_all,
+            args=(targets, "cap_manual"),
             daemon=True,
         ).start()
 

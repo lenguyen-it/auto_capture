@@ -76,17 +76,10 @@ def capture_window_by_hwnd(
 # ---------------------------------------------------------------------------
 
 
-def capture_region(
-    x1: int,
-    y1: int,
-    x2: int,
-    y2: int,
-    base_folder: str,
-    file_prefix: str = "region",
-) -> str | None:
+def grab_region(x1: int, y1: int, x2: int, y2: int) -> Image.Image | None:
     """
     Chụp vùng màn hình xác định bởi (x1, y1) -> (x2, y2) (tọa độ màn hình tuyệt đối).
-    Trả về đường dẫn file ảnh nếu thành công, None nếu thất bại.
+    Trả về ảnh PIL (không lưu file), None nếu thất bại.
     """
     left, top = min(x1, x2), min(y1, y2)
     right, bot = max(x1, x2), max(y1, y2)
@@ -126,11 +119,38 @@ def capture_region(
         mfc_dc.DeleteDC()
         win32gui.ReleaseDC(hdesktop, desktop_dc)
 
-        return _save_image(im, base_folder, file_prefix, label=f"({w}x{h})")
+        return im
 
     except Exception as e:
         print(f"Lỗi khi chụp vùng: {e}")
         return None
+
+
+def capture_region(
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+    base_folder: str,
+    file_prefix: str = "region",
+) -> str | None:
+    """
+    Chụp vùng màn hình xác định bởi (x1, y1) -> (x2, y2) (tọa độ màn hình tuyệt đối).
+    Trả về đường dẫn file ảnh nếu thành công, None nếu thất bại.
+    """
+    im = grab_region(x1, y1, x2, y2)
+    if im is None:
+        return None
+
+    w, h = im.size
+    return _save_image(im, base_folder, file_prefix, label=f"({w}x{h})")
+
+
+def save_image(
+    im: Image.Image, base_folder: str, file_prefix: str = "capture", label: str = ""
+) -> str | None:
+    """Lưu một ảnh PIL có sẵn (ví dụ ảnh đã vẽ annotation) vào base_folder/YYYY-MM-DD/."""
+    return _save_image(im, base_folder, file_prefix, label)
 
 
 # ---------------------------------------------------------------------------
