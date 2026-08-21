@@ -1,4 +1,5 @@
 import tkinter as tk
+from typing import Any, ClassVar
 
 
 class _Tooltip:
@@ -48,7 +49,7 @@ class _Tooltip:
 
 class ActionToolbar(tk.Toplevel):
 
-    BTN_STYLE = {
+    BTN_STYLE: ClassVar[dict[str, Any]] = {
         "font": ("Segoe UI Emoji", 12),
         "width": 2,
         "height": 1,
@@ -61,11 +62,11 @@ class ActionToolbar(tk.Toplevel):
     }
 
     # Màu nền của nút tool đang được chọn
-    ACTIVE_BG = "#bfdbfe"
-    HOVER_BG = "#eef2f7"
+    ACTIVE_BG: ClassVar[str] = "#bfdbfe"
+    HOVER_BG: ClassVar[str] = "#eef2f7"
 
     # (icon, tên tool, tooltip) — nút chọn công cụ annotation
-    TOOL_BUTTONS = [
+    TOOL_BUTTONS: ClassVar[list[tuple[str, str, str]]] = [
         ("✏", "pen", "Bút vẽ tự do"),
         ("T", "text", "Thêm chữ (Arial 12)"),
         ("▭", "rect", "Khung chữ nhật"),
@@ -73,7 +74,7 @@ class ActionToolbar(tk.Toplevel):
     ]
 
     # (icon, action, tooltip) — nút hành động
-    ACTION_BUTTONS = [
+    ACTION_BUTTONS: ClassVar[list[tuple[str, str, str]]] = [
         ("↶", "undo", "Hoàn tác (Ctrl+Z)"),
         ("📋", "copy", "Copy vào clipboard"),
         ("📷", "capture", "Lưu ảnh vùng chọn"),
