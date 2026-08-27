@@ -1,13 +1,13 @@
+import ctypes
 import os
 import re
-import ctypes
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
 from datetime import datetime, timedelta
+from tkinter import filedialog, messagebox, ttk
 
-from core.window_utils import get_all_visible_windows
-from core.capture import capture_window_by_hwnd
+from scr.core.capture import capture_window_by_hwnd
+from scr.core.window_utils import get_all_visible_windows
 
 
 class PageAuto(tk.Frame):

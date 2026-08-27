@@ -1,10 +1,11 @@
-import os
 import ctypes
+import os
 from datetime import datetime
-from PIL import Image
+
+import win32con
 import win32gui
 import win32ui
-import win32con
+from PIL import Image
 
 # ---------------------------------------------------------------------------
 # Chụp cửa sổ theo HWND (PrintWindow)

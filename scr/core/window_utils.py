@@ -1,7 +1,8 @@
-import os
 import ctypes
-import win32gui
+import os
+
 import win32con
+import win32gui
 import win32process
 
 # Constant cho DwmGetWindowAttribute

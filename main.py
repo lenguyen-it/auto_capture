@@ -1,8 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
 
-from pages.page_auto_cap_window import PageAuto
-from pages.page_region import PageRegion
+from scr.pages.page_auto_cap_window import PageAuto
+from scr.pages.page_region import PageRegion
 
 
 def build_app():

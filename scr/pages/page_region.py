@@ -1,15 +1,16 @@
 import os
-import time
 import threading
+import time
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
 from datetime import datetime, timedelta
-from PIL import Image, ImageTk, ImageEnhance
+from tkinter import filedialog, messagebox, ttk
 
-from core.capture import capture_region, grab_region, save_image
-from core.clipboard_utils import copy_image_to_clipboard
-from pages.components.toolbar import ActionToolbar
-from pages.components.annotations import AnnotationLayer
+from PIL import Image, ImageEnhance, ImageTk
+
+from scr.core.capture import capture_region, grab_region, save_image
+from scr.core.clipboard_utils import copy_image_to_clipboard
+from scr.pages.components.annotations import AnnotationLayer
+from scr.pages.components.toolbar import ActionToolbar
 
 # ---------------------------------------------------------------------------
 # Overlay chọn vùng (toàn màn hình)
@@ -178,7 +179,8 @@ class RegionSelector(tk.Toplevel):
         self.destroy()
 
     # Con trỏ tương ứng với từng vị trí trên vùng chọn
-    _HIT_CURSORS = {
+
+    _HIT_CURSORS = {  # noqa: RUF012
         "move": "fleur",
         "l": "sb_h_double_arrow",
         "r": "sb_h_double_arrow",
