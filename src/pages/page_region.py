@@ -7,10 +7,10 @@ from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageEnhance, ImageTk
 
-from scr.core.capture import capture_region, grab_region, save_image
-from scr.core.clipboard_utils import copy_image_to_clipboard
-from scr.pages.components.annotations import AnnotationLayer
-from scr.pages.components.toolbar import ActionToolbar
+from src.core.capture import capture_region, grab_region, save_image
+from src.core.clipboard_utils import copy_image_to_clipboard
+from src.pages.components.annotations import AnnotationLayer
+from src.pages.components.toolbar import ActionToolbar
 
 # ---------------------------------------------------------------------------
 # Overlay chọn vùng (toàn màn hình)
@@ -39,6 +39,8 @@ class RegionSelector(tk.Toplevel):
         self._mask_items = []
         self._hint_bg_id = None
         self._hint_text_id = None
+        self._drag_hint_bg_id = None
+        self._drag_hint_text_id = None
 
         # Vùng chọn hiện tại theo toạ độ canvas + trạng thái kéo
         # _drag_mode: None | "select" | "move" | "l"/"r"/"t"/"b"/"tl"/"tr"/"bl"/"br"
@@ -84,6 +86,7 @@ class RegionSelector(tk.Toplevel):
         self.bind("<Control-z>", lambda _e: self._annotations.undo())
 
         self._draw_base_mask()
+        self._show_drag_hint(self.winfo_pointerx(), self.winfo_pointery())
 
         try:
             self.grab_set()
@@ -134,6 +137,51 @@ class RegionSelector(tk.Toplevel):
         if self._hint_text_id:
             self.canvas.delete(self._hint_text_id)
             self._hint_text_id = None
+
+    def _show_drag_hint(self, root_x, root_y):
+        """Hiển thị chữ 'Chọn vùng kéo' bám theo con trỏ khi chưa có vùng chọn."""
+        x = root_x - self.winfo_rootx() + 18
+        y = root_y - self.winfo_rooty() + 18
+
+        if self._drag_hint_text_id is None:
+            self._drag_hint_text_id = self.canvas.create_text(
+                x,
+                y,
+                text="Chọn vùng kéo",
+                fill="white",
+                font=("Segoe UI", 10, "bold"),
+                anchor="nw",
+            )
+            bbox = self.canvas.bbox(self._drag_hint_text_id)
+            self._drag_hint_bg_id = self.canvas.create_rectangle(
+                bbox[0] - 6,
+                bbox[1] - 4,
+                bbox[2] + 6,
+                bbox[3] + 4,
+                fill="#111827",
+                outline="",
+            )
+            self.canvas.tag_raise(self._drag_hint_text_id, self._drag_hint_bg_id)
+        else:
+            self.canvas.coords(self._drag_hint_text_id, x, y)
+            bbox = self.canvas.bbox(self._drag_hint_text_id)
+            if self._drag_hint_bg_id is not None:
+                self.canvas.coords(
+                    self._drag_hint_bg_id,
+                    bbox[0] - 6,
+                    bbox[1] - 4,
+                    bbox[2] + 6,
+                    bbox[3] + 4,
+                )
+                self.canvas.tag_raise(self._drag_hint_text_id, self._drag_hint_bg_id)
+
+    def _hide_drag_hint(self):
+        if self._drag_hint_bg_id:
+            self.canvas.delete(self._drag_hint_bg_id)
+            self._drag_hint_bg_id = None
+        if self._drag_hint_text_id:
+            self.canvas.delete(self._drag_hint_text_id)
+            self._drag_hint_text_id = None
 
     def _draw_base_mask(self):
         # Nền = ảnh màn hình đã làm tối mượt bằng PIL (thay cho stipple bị "nhòe");
@@ -229,6 +277,12 @@ class RegionSelector(tk.Toplevel):
         return None
 
     def _on_motion(self, event):
+        # Chữ "Chọn vùng kéo" chỉ hiện khi chưa có vùng chọn nào và chưa vẽ annotation
+        if self._sel is None and self._annotations.tool is None:
+            self._show_drag_hint(event.x_root, event.y_root)
+        else:
+            self._hide_drag_hint()
+
         # Không đổi con trỏ khi đang vẽ annotation hoặc đang kéo
         if self._annotations.tool is not None or self._drag_mode is not None:
             return
@@ -257,6 +311,7 @@ class RegionSelector(tk.Toplevel):
         self._start_x = event.x_root
         self._start_y = event.y_root
         self._hide_hint()
+        self._hide_drag_hint()
         # Vẽ lại lớp mờ ngay (không chỉ xoá) để overlay không bao giờ
         # rơi về trạng thái trong suốt hoàn toàn / click xuyên qua.
         self._draw_mask(event.x, event.y, event.x, event.y)
@@ -595,18 +650,18 @@ class PageRegion(tk.Frame):
         self.cb_unit.current(0)
         self.cb_unit.pack(side="left")
 
-        # self.btn_sched = tk.Button(
-        #     frame_sched,
-        #     text="Bắt đầu lịch",
-        #     font=("Segoe UI", 10, "bold"),
-        #     bg="#e65100",
-        #     fg="white",
-        #     activebackground="#bf360c",
-        #     relief="flat",
-        #     cursor="hand2",
-        #     command=self._toggle_schedule,
-        # )
-        # self.btn_sched.pack(side="right")
+        self.btn_sched = tk.Button(
+            frame_sched,
+            text="Bắt đầu lịch",
+            font=("Segoe UI", 10, "bold"),
+            bg="#e65100",
+            fg="white",
+            activebackground="#bf360c",
+            relief="flat",
+            cursor="hand2",
+            command=self._toggle_schedule,
+        )
+        self.btn_sched.pack(side="right")
 
         self.lbl_status = tk.Label(
             section3,
@@ -750,7 +805,7 @@ class PageRegion(tk.Frame):
     def _toggle_schedule(self):
         if self.is_running:
             self.is_running = False
-            # self.btn_sched.config(text="Bắt đầu lịch", bg="#e65100")
+            self.btn_sched.config(text="Bắt đầu lịch", bg="#e65100")
             self.lbl_status.config(text="Lịch chụp đã dừng", fg="#e53935")
             return
 
@@ -773,7 +828,7 @@ class PageRegion(tk.Frame):
         os.makedirs(folder, exist_ok=True)
 
         self.is_running = True
-        # self.btn_sched.config(text="Dừng lịch", bg="#c62828")
+        self.btn_sched.config(text="Dừng lịch", bg="#c62828")
         self.lbl_status.config(
             text=f"Đang chụp mỗi {interval} {unit.lower()}...", fg="#2e7d32"
         )

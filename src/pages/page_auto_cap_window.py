@@ -6,8 +6,8 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import filedialog, messagebox, ttk
 
-from scr.core.capture import capture_window_by_hwnd
-from scr.core.window_utils import get_all_visible_windows
+from src.core.capture import capture_window_by_hwnd
+from src.core.window_utils import get_all_visible_windows
 
 
 class PageAuto(tk.Frame):
