@@ -7,6 +7,8 @@ import win32gui
 import win32ui
 from PIL import Image
 
+from src.core.app_config import load_config
+
 # ---------------------------------------------------------------------------
 # Chụp cửa sổ theo HWND (PrintWindow)
 # ---------------------------------------------------------------------------
@@ -147,6 +149,32 @@ def capture_region(
     return _save_image(im, base_folder, file_prefix, label=f"({w}x{h})")
 
 
+def capture_desktop(
+    base_folder: str,
+    file_prefix: str = "desktop",
+) -> str | None:
+    """
+    Chụp toàn bộ desktop (tất cả màn hình ảo, bao gồm nhiều monitor).
+    Trả về đường dẫn file ảnh nếu thành công, None nếu thất bại.
+    """
+    SM_XVIRTUALSCREEN = 76
+    SM_YVIRTUALSCREEN = 77
+    SM_CXVIRTUALSCREEN = 78
+    SM_CYVIRTUALSCREEN = 79
+
+    left = ctypes.windll.user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+    top = ctypes.windll.user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+    width = ctypes.windll.user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
+    height = ctypes.windll.user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
+
+    im = grab_region(left, top, left + width, top + height)
+    if im is None:
+        return None
+
+    w, h = im.size
+    return _save_image(im, base_folder, file_prefix, label=f"({w}x{h})")
+
+
 def save_image(
     im: Image.Image, base_folder: str, file_prefix: str = "capture", label: str = ""
 ) -> str | None:
@@ -164,13 +192,26 @@ def _save_image(
 ) -> str | None:
     """Lưu ảnh vào thư mục base_folder/YYYY-MM-DD/. Trả về path hoặc None."""
     try:
+        config = load_config()
+        image_format = config.get("image_format", "PNG")
+
         current_date = datetime.now().strftime("%Y-%m-%d")
         target_dir = os.path.join(base_folder, current_date)
         os.makedirs(target_dir, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        out_path = os.path.join(target_dir, f"{file_prefix}_{timestamp}.png")
-        im.save(out_path)
+
+        if image_format == "JPEG":
+            ext = "jpg"
+            save_kwargs = {"quality": config.get("jpeg_quality", 95)}
+            if im.mode != "RGB":
+                im = im.convert("RGB")
+        else:
+            ext = "png"
+            save_kwargs = {"compress_level": config.get("png_compress_level", 6)}
+
+        out_path = os.path.join(target_dir, f"{file_prefix}_{timestamp}.{ext}")
+        im.save(out_path, format=image_format, **save_kwargs)
 
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Đã lưu {label} -> {out_path}")
         return out_path

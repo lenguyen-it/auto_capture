@@ -7,25 +7,28 @@ from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
-from src.core.capture import capture_region, grab_region, save_image
-from src.core.clipboard_utils import copy_image_to_clipboard
-from src.pages.components.region_selector import RegionSelector
+from src.core.capture import capture_desktop
+from src.core.scroll_capture import capture_scrolling_window
+from src.core.window_utils import get_all_visible_windows
 
 # ---------------------------------------------------------------------------
-# Tab chụp theo vùng
+# Tab chụp toàn bộ desktop
 # ---------------------------------------------------------------------------
 
+MODE_FULLSCREEN = "Toàn màn hình"
+MODE_SCROLLING = "Scrolling (trang web dài)"
 
-class PageRegion(tk.Frame):
-    """Frame cho tab chụp theo vùng."""
+
+class PageDesktop(tk.Frame):
+    """Frame cho tab chụp toàn bộ desktop."""
 
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
         self.configure(bg="#f5f5f5")
 
         self.save_folder = os.path.abspath("screenshots")
-        self.region = None
         self.preview_img = None
+        self.windows_data: list[tuple[str, int]] = []
 
         self.is_running = False
         self.schedule_thread = None
@@ -33,41 +36,66 @@ class PageRegion(tk.Frame):
         self._build_ui()
 
     def _build_ui(self):
-        # ===== Phần 1: Chọn vùng =====
-        section1 = tk.LabelFrame(
+        # ===== Phần 0: Chế độ chụp =====
+        section0 = tk.LabelFrame(
             self,
-            text="Chọn vùng chụp  ",
+            text="Chế độ chụp",
             font=("Segoe UI", 10, "bold"),
             bg="#f5f5f5",
             fg="#1565c0",
             bd=1,
             relief="groove",
         )
-        section1.pack(fill="x", padx=15, pady=(10, 4))
+        section0.pack(fill="x", padx=15, pady=(10, 4))
+
+        frame_mode = tk.Frame(section0, bg="#f5f5f5")
+        frame_mode.pack(fill="x", padx=10, pady=8)
+
+        self.cb_mode = ttk.Combobox(
+            frame_mode,
+            values=[MODE_FULLSCREEN, MODE_SCROLLING],
+            state="readonly",
+            font=("Segoe UI", 10),
+        )
+        self.cb_mode.current(0)
+        self.cb_mode.pack(fill="x")
+        self.cb_mode.bind("<<ComboboxSelected>>", self._on_mode_changed)
+
+        # --- Chọn cửa sổ (chỉ dùng ở chế độ Scrolling) ---
+        self.frame_window_pick = tk.Frame(section0, bg="#f5f5f5")
+
+        tk.Label(
+            self.frame_window_pick,
+            text="Chọn cửa sổ cần chụp (vd. trình duyệt):",
+            font=("Segoe UI", 9),
+            bg="#f5f5f5",
+            fg="#555",
+        ).pack(anchor="w", padx=10)
+
+        frame_cb = tk.Frame(self.frame_window_pick, bg="#f5f5f5")
+        frame_cb.pack(fill="x", padx=10, pady=(2, 8))
+
+        self.lb_windows = tk.Listbox(
+            frame_cb,
+            selectmode="browse",
+            exportselection=False,
+            height=4,
+            font=("Segoe UI", 9),
+        )
+        self.lb_windows.pack(side="left", fill="x", expand=True)
 
         tk.Button(
-            section1,
-            text="KÉO CHỌN VÙNG",
-            font=("Segoe UI", 11, "bold"),
-            bg="#1565c0",
-            fg="white",
-            activebackground="#0d47a1",
+            frame_cb,
+            text="Làm mới",
+            command=self._refresh_windows,
+            font=("Segoe UI", 9),
             relief="flat",
+            bg="#e0e0e0",
             cursor="hand2",
-            command=self._start_region_select,
-        ).pack(fill="x", padx=10, pady=8)
+        ).pack(side="right", padx=(5, 0))
 
-        # self.lbl_region = tk.Label(
-        #     section1,
-        #     text="Chưa có vùng nào được chọn",
-        #     font=("Segoe UI", 9, "italic"),
-        #     fg="#888",
-        #     bg="#f5f5f5",
-        # )
-        # self.lbl_region.pack(pady=(2, 8))
-
-        # ===== Phần 2: Thư mục lưu =====
-        section2 = tk.LabelFrame(
+        # ===== Phần 1: Thư mục lưu =====
+        section1 = tk.LabelFrame(
             self,
             text="Thư mục lưu",
             font=("Segoe UI", 10, "bold"),
@@ -76,9 +104,9 @@ class PageRegion(tk.Frame):
             bd=1,
             relief="groove",
         )
-        section2.pack(fill="x", padx=15, pady=4)
+        section1.pack(fill="x", padx=15, pady=(10, 4))
 
-        frame_folder = tk.Frame(section2, bg="#f5f5f5")
+        frame_folder = tk.Frame(section1, bg="#f5f5f5")
         frame_folder.pack(fill="x", padx=10, pady=8)
 
         self.entry_folder = tk.Entry(frame_folder, font=("Segoe UI", 10))
@@ -96,8 +124,8 @@ class PageRegion(tk.Frame):
             cursor="hand2",
         ).pack(side="right", padx=5)
 
-        # ===== Phần 3: Hành động =====
-        section3 = tk.LabelFrame(
+        # ===== Phần 2: Hành động =====
+        section2 = tk.LabelFrame(
             self,
             text=" Thực hiện  ",
             font=("Segoe UI", 10, "bold"),
@@ -106,21 +134,22 @@ class PageRegion(tk.Frame):
             bd=1,
             relief="groove",
         )
-        section3.pack(fill="x", padx=15, pady=4)
+        section2.pack(fill="x", padx=15, pady=4)
 
-        # tk.Button(
-        #     section3,
-        #     text="CHỤP NGAY",
-        #     font=("Segoe UI", 11, "bold"),
-        #     bg="#2e7d32",
-        #     fg="white",
-        #     activebackground="#1b5e20",
-        #     relief="flat",
-        #     cursor="hand2",
-        #     command=self._capture_now,
-        # ).pack(fill="x", padx=10, pady=(8, 4))
+        self.btn_capture_now = tk.Button(
+            section2,
+            text="CHỤP NGAY",
+            font=("Segoe UI", 11, "bold"),
+            bg="#2e7d32",
+            fg="white",
+            activebackground="#1b5e20",
+            relief="flat",
+            cursor="hand2",
+            command=self._on_click_capture_now,
+        )
+        self.btn_capture_now.pack(fill="x", padx=10, pady=(8, 4))
 
-        frame_sched = tk.Frame(section3, bg="#f5f5f5")
+        frame_sched = tk.Frame(section2, bg="#f5f5f5")
         frame_sched.pack(fill="x", padx=10, pady=4)
 
         tk.Label(
@@ -158,7 +187,7 @@ class PageRegion(tk.Frame):
         self.btn_sched.pack(side="right")
 
         self.lbl_status = tk.Label(
-            section3,
+            section2,
             text="Trạng thái: Sẵn sàng",
             font=("Segoe UI", 9, "italic"),
             fg="#888",
@@ -166,8 +195,8 @@ class PageRegion(tk.Frame):
         )
         self.lbl_status.pack(pady=(4, 8))
 
-        # ===== Phần 4: Preview =====
-        section4 = tk.LabelFrame(
+        # ===== Phần 3: Preview =====
+        section3 = tk.LabelFrame(
             self,
             text="Preview ảnh vừa chụp  ",
             font=("Segoe UI", 10, "bold"),
@@ -176,10 +205,10 @@ class PageRegion(tk.Frame):
             bd=1,
             relief="groove",
         )
-        section4.pack(fill="both", expand=True, padx=15, pady=(4, 10))
+        section3.pack(fill="both", expand=True, padx=15, pady=(4, 10))
 
         self.lbl_preview = tk.Label(
-            section4,
+            section3,
             text="(Chưa có ảnh)",
             bg="#e8e8e8",
             fg="#aaa",
@@ -189,106 +218,37 @@ class PageRegion(tk.Frame):
         self.lbl_preview.pack(fill="both", expand=True, padx=8, pady=8)
         self.lbl_preview.bind("<Button-1>", self._open_last_image)
 
-    def _start_region_select(self):
-        root = self.winfo_toplevel()
-        # Ghi nhớ trạng thái hiện tại (đang mở hay đang ẩn ở tray) để khôi phục
-        # đúng trạng thái đó sau khi chụp xong, thay vì luôn mở cửa sổ lên.
-        was_visible = root.state() != "withdrawn"
-        root.withdraw()
-        # Chờ cửa sổ app ẩn hẳn rồi mới đóng băng màn hình,
-        # để giao diện app không lọt vào ảnh nền chụp
-        self.after(300, lambda: self._open_overlay(root, was_visible))
+        self._on_mode_changed()
 
-    def _open_overlay(self, root, was_visible=True):
-        selector = None
-        try:
-            # Đóng băng ảnh màn hình trước khi mở overlay
-            screenshot = grab_region(
-                0, 0, root.winfo_screenwidth(), root.winfo_screenheight()
-            )
-            if screenshot is None:
-                raise RuntimeError("Không chụp được ảnh nền màn hình")
+    def _on_mode_changed(self, _event=None):
+        if self.cb_mode.get() == MODE_SCROLLING:
+            self.frame_window_pick.pack(fill="x")
+            self._refresh_windows()
+            self.btn_capture_now.config(text="CHỤP SCROLLING")
+        else:
+            self.frame_window_pick.pack_forget()
+            self.btn_capture_now.config(text="CHỤP NGAY")
 
-            selector = RegionSelector(
-                root, screenshot, on_confirm=self._handle_region_selection
-            )
-            root.wait_window(selector)
-        except Exception as e:
-            print(f"Lỗi khi mở overlay chọn vùng: {e}")
-        finally:
-            if selector is not None and selector.winfo_exists():
-                try:
-                    selector.grab_release()
-                    selector.destroy()
-                except Exception:
-                    pass
-            if was_visible:
-                root.deiconify()
+    def _refresh_windows(self):
+        self.windows_data = get_all_visible_windows()
+        self.lb_windows.delete(0, tk.END)
+        for title, _ in self.windows_data:
+            self.lb_windows.insert(tk.END, title)
+        if self.windows_data:
+            self.lb_windows.selection_set(0)
 
-    def _handle_region_selection(self, region, action, image=None):
-        self.region = region
-        # self._update_region_label()
-
-        if action == "capture":
-            self._save_annotated(image)
-        elif action == "copy":
-            self._copy_annotated(image)
-        elif action == "schedule":
-            self._toggle_schedule()
-
-    def _save_annotated(self, image):
-        """Lưu ảnh vùng chọn đã ghép annotation. Không có ảnh thì chụp live."""
-        if image is None:
+    def _on_click_capture_now(self):
+        if self.cb_mode.get() == MODE_SCROLLING:
+            self._capture_scrolling()
+        else:
             self._capture_now()
-            return
-
-        folder = self.entry_folder.get().strip()
-        os.makedirs(folder, exist_ok=True)
-
-        path = save_image(image, folder, "region_manual", label=f"{image.size}")
-        if path:
-            self._show_preview(path)
-            self.lbl_status.config(
-                text=f"Đã chụp: {os.path.basename(path)}", fg="#2e7d32"
-            )
-
-    def _copy_annotated(self, image):
-        if image is None:
-            return
-        try:
-            copy_image_to_clipboard(image)
-            self.lbl_status.config(
-                text="Đã copy ảnh vào clipboard (Ctrl+V để dán)", fg="#2e7d32"
-            )
-        except Exception as e:
-            messagebox.showerror("Lỗi", f"Không thể copy vào clipboard: {e}")
-
-    # def _update_region_label(self):
-    #     if self.region:
-    #         x1, y1, x2, y2 = self.region
-    #         w = x2 - x1
-    #         h = y2 - y1
-    #         self.lbl_region.config(
-    #             text=f"Vùng: ({x1}, {y1}) → ({x2}, {y2})   |   Kích thước: {w} x {h} px",
-    #             fg="#1565c0",
-    #             font=("Segoe UI", 9, "bold"),
-    #         )
 
     def _capture_now(self):
-        if not self.region:
-            messagebox.showwarning(
-                "Chưa chọn vùng", "Vui lòng chọn vùng trước khi chụp!"
-            )
-            return
-
         folder = self.entry_folder.get().strip()
         os.makedirs(folder, exist_ok=True)
 
         def do_capture():
-            if not self.region:
-                return
-            x1, y1, x2, y2 = self.region
-            path = capture_region(x1, y1, x2, y2, folder, "region_manual")
+            path = capture_desktop(folder, "desktop_manual")
             if path:
                 self.after(0, lambda: self._show_preview(path))
                 self.after(
@@ -300,15 +260,66 @@ class PageRegion(tk.Frame):
 
         threading.Thread(target=do_capture, daemon=True).start()
 
+    def _capture_scrolling(self):
+        selection = self.lb_windows.curselection()
+        if not selection:
+            messagebox.showwarning(
+                "Cảnh báo", "Vui lòng chọn một cửa sổ để chụp scrolling!"
+            )
+            return
+
+        _title, hwnd = self.windows_data[selection[0]]
+        folder = self.entry_folder.get().strip()
+        os.makedirs(folder, exist_ok=True)
+
+        self.btn_capture_now.config(state="disabled")
+        self.lbl_status.config(text="Đang cuộn & chụp...", fg="#e65100")
+
+        def on_progress(count):
+            self.after(
+                0,
+                lambda: self.lbl_status.config(
+                    text=f"Đang cuộn & chụp... (đoạn {count})", fg="#e65100"
+                ),
+            )
+
+        def do_capture():
+            path = capture_scrolling_window(
+                hwnd, folder, "desktop_scroll", on_progress=on_progress
+            )
+            self.after(0, lambda: self.btn_capture_now.config(state="normal"))
+            if path:
+                self.after(0, lambda: self._show_preview(path))
+                self.after(
+                    0,
+                    lambda: self.lbl_status.config(
+                        text=f"Đã chụp: {os.path.basename(path)}", fg="#2e7d32"
+                    ),
+                )
+            else:
+                self.after(
+                    0,
+                    lambda: self.lbl_status.config(
+                        text="Chụp scrolling thất bại", fg="#e53935"
+                    ),
+                )
+            # Cửa sổ target đã được đưa lên foreground để chụp -> đưa app
+            # trở lại lên trước màn hình sau khi chụp & lưu xong.
+            self.after(0, self._restore_app_window)
+
+        threading.Thread(target=do_capture, daemon=True).start()
+
+    def _restore_app_window(self):
+        top = self.winfo_toplevel()
+        top.deiconify()
+        top.lift()
+        top.focus_force()
+
     def _toggle_schedule(self):
         if self.is_running:
             self.is_running = False
             self.btn_sched.config(text="Bắt đầu lịch", bg="#e65100")
             self.lbl_status.config(text="Lịch chụp đã dừng", fg="#e53935")
-            return
-
-        if not self.region:
-            messagebox.showwarning("Chưa chọn vùng", "Vui lòng chọn vùng trước!")
             return
 
         try:
@@ -345,10 +356,7 @@ class PageRegion(tk.Frame):
             else timedelta(seconds=interval_val)
         )
 
-        if not self.region:
-            return
-        x1, y1, x2, y2 = self.region
-        path = capture_region(x1, y1, x2, y2, folder, "region_sched")
+        path = capture_desktop(folder, "desktop_sched")
         if path:
             self.after(0, lambda p=path: self._show_preview(p))
 
@@ -356,8 +364,7 @@ class PageRegion(tk.Frame):
 
         while self.is_running:
             if datetime.now() >= next_time:
-                x1, y1, x2, y2 = self.region
-                path = capture_region(x1, y1, x2, y2, folder, "region_sched")
+                path = capture_desktop(folder, "desktop_sched")
                 if path:
                     self.after(0, lambda p=path: self._show_preview(p))
                     self.after(
