@@ -479,8 +479,16 @@ class RegionSelector(tk.Toplevel):
         def handle_tool(tool):
             self._annotations.set_tool(tool)
 
+        def handle_color(color):
+            self._annotations.set_color(color)
+
         self._toolbar = ActionToolbar(
-            self, (x1, y1, x2, y2), handle_action, on_tool=handle_tool
+            self,
+            (x1, y1, x2, y2),
+            handle_action,
+            on_tool=handle_tool,
+            initial_color=self._annotations.color,
+            on_color=handle_color,
         )
 
     def _compose_image(self):

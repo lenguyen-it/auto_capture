@@ -37,6 +37,7 @@ class AnnotationLayer:
     def __init__(self, canvas: tk.Canvas):
         self.canvas = canvas
         self.tool: str | None = None
+        self.color: str = COLOR
         self.region: tuple[int, int, int, int] | None = None
 
         # Stack các annotation đã hoàn thành (phục vụ undo + render)
@@ -47,6 +48,7 @@ class AnnotationLayer:
         self._entry: tk.Entry | None = None
         self._entry_item: int | None = None
         self._entry_pos: tuple[int, int] | None = None
+        self._entry_color: str = COLOR
 
     # ------------------------------------------------------------------
     # Trạng thái tool / vùng vẽ
@@ -60,6 +62,9 @@ class AnnotationLayer:
         else:
             cursor = TOOL_CURSORS.get(tool, "cross")
         self.canvas.configure(cursor=cursor)
+
+    def set_color(self, color: str):
+        self.color = color
 
     def set_region(self, region: tuple[int, int, int, int]):
         self.region = region
@@ -130,7 +135,7 @@ class AnnotationLayer:
                 flat = [c for p in d["points"] for c in p]
                 d["item"] = self.canvas.create_line(
                     *flat,
-                    fill=COLOR,
+                    fill=self.color,
                     width=LINE_WIDTH,
                     capstyle="round",
                     joinstyle="round",
@@ -138,7 +143,7 @@ class AnnotationLayer:
                 )
         elif d["type"] == "rect":
             d["item"] = self.canvas.create_rectangle(
-                x0, y0, x, y, outline=COLOR, width=LINE_WIDTH
+                x0, y0, x, y, outline=self.color, width=LINE_WIDTH
             )
         elif d["type"] == "arrow":
             d["item"] = self.canvas.create_line(
@@ -146,7 +151,7 @@ class AnnotationLayer:
                 y0,
                 x,
                 y,
-                fill=COLOR,
+                fill=self.color,
                 width=LINE_WIDTH,
                 arrow=tk.LAST,
                 arrowshape=ARROW_SHAPE,
@@ -174,7 +179,7 @@ class AnnotationLayer:
                 self.canvas.delete(d["item"])
             return True
 
-        rec: dict = {"type": d["type"], "items": [d["item"]]}
+        rec: dict = {"type": d["type"], "items": [d["item"]], "color": self.color}
         if d["type"] == "pen":
             rec["points"] = d["points"]
         else:
@@ -190,14 +195,15 @@ class AnnotationLayer:
         entry = tk.Entry(
             self.canvas,
             font=(FONT_FAMILY, FONT_SIZE),
-            fg=COLOR,
-            insertbackground=COLOR,
+            fg=self.color,
+            insertbackground=self.color,
             relief="solid",
             bd=1,
             width=8,
         )
         self._entry = entry
         self._entry_pos = (x, y)
+        self._entry_color = self.color
         self._entry_item = self.canvas.create_window(x, y, window=entry, anchor="nw")
         entry.focus_set()
 
@@ -228,6 +234,7 @@ class AnnotationLayer:
 
         text = self._entry.get().strip()
         x, y = self._entry_pos
+        color = self._entry_color
         self._cancel_entry()
         if not text:
             return
@@ -236,12 +243,18 @@ class AnnotationLayer:
             x + 3,
             y + 3,
             text=text,
-            fill=COLOR,
+            fill=color,
             font=(FONT_FAMILY, FONT_SIZE),
             anchor="nw",
         )
         self._records.append(
-            {"type": "text", "items": [item], "pos": (x + 3, y + 3), "text": text}
+            {
+                "type": "text",
+                "items": [item],
+                "pos": (x + 3, y + 3),
+                "text": text,
+                "color": color,
+            }
         )
 
     def _cancel_entry(self):
@@ -281,9 +294,10 @@ class AnnotationLayer:
 
         ox, oy = offset
         for rec in self._records:
+            color = rec.get("color", COLOR)
             if rec["type"] == "pen":
                 pts = [(px - ox, py - oy) for px, py in rec["points"]]
-                draw.line(pts, fill=COLOR, width=LINE_WIDTH, joint="curve")
+                draw.line(pts, fill=color, width=LINE_WIDTH, joint="curve")
             elif rec["type"] == "rect":
                 x1, y1, x2, y2 = rec["coords"]
                 box = (
@@ -292,25 +306,25 @@ class AnnotationLayer:
                     max(x1, x2) - ox,
                     max(y1, y2) - oy,
                 )
-                draw.rectangle(box, outline=COLOR, width=LINE_WIDTH)
+                draw.rectangle(box, outline=color, width=LINE_WIDTH)
             elif rec["type"] == "arrow":
                 x1, y1, x2, y2 = rec["coords"]
-                self._draw_arrow(draw, x1 - ox, y1 - oy, x2 - ox, y2 - oy)
+                self._draw_arrow(draw, x1 - ox, y1 - oy, x2 - ox, y2 - oy, color)
             elif rec["type"] == "text":
                 x, y = rec["pos"]
-                draw.text((x - ox, y - oy), rec["text"], fill=COLOR, font=font)
+                draw.text((x - ox, y - oy), rec["text"], fill=color, font=font)
         return im
 
     @staticmethod
-    def _draw_arrow(draw: ImageDraw.ImageDraw, x1, y1, x2, y2):
-        draw.line((x1, y1, x2, y2), fill=COLOR, width=LINE_WIDTH)
+    def _draw_arrow(draw: ImageDraw.ImageDraw, x1, y1, x2, y2, color=COLOR):
+        draw.line((x1, y1, x2, y2), fill=color, width=LINE_WIDTH)
 
         ang = math.atan2(y2 - y1, x2 - x1)
         head = max(ARROW_SHAPE[1], LINE_WIDTH * 3)
         spread = math.radians(22)
         p1 = (x2 - head * math.cos(ang - spread), y2 - head * math.sin(ang - spread))
         p2 = (x2 - head * math.cos(ang + spread), y2 - head * math.sin(ang + spread))
-        draw.polygon([(x2, y2), p1, p2], fill=COLOR)
+        draw.polygon([(x2, y2), p1, p2], fill=color)
 
     # ------------------------------------------------------------------
     # Helper

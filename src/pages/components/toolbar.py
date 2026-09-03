@@ -1,8 +1,16 @@
+import ctypes
 import os
 import tkinter as tk
-from typing import Any, ClassVar
+from tkinter import colorchooser
+from typing import Any, ClassVar, cast
 
 from PIL import Image, ImageTk
+
+from src.pages.components.annotations import COLOR
+
+# Class name của dialog Chọn màu chuẩn Windows (Common Dialog Box), dùng để
+# tìm cửa sổ dialog vừa mở và di chuyển nó tới vị trí mong muốn.
+_COLOR_DIALOG_CLASS = "#32770"
 
 _ICONS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
@@ -94,14 +102,19 @@ class ActionToolbar(tk.Toplevel):
         ("cancel.png", "cancel", "Hủy (Esc)"),
     ]
 
-    def __init__(self, parent, rect, on_action, on_tool=None):
+    def __init__(
+        self, parent, rect, on_action, on_tool=None, on_color=None, initial_color=None
+    ):
         """rect = (x1, y1, x2, y2) của vùng chọn theo toạ độ màn hình."""
         super().__init__(parent)
 
         self.on_action = on_action
         self.on_tool = on_tool
+        self.on_color = on_color
         self._active_tool = None
+        self._current_color = initial_color or COLOR
         self._tool_btns: dict[str, tk.Button] = {}
+        self._color_swatch: tk.Canvas | None = None
         # Giữ tham chiếu PhotoImage để tránh bị garbage-collected
         self._icon_cache: dict[str, ImageTk.PhotoImage] = {}
 
@@ -135,6 +148,24 @@ class ActionToolbar(tk.Toplevel):
             btn.bind("<Leave>", lambda e, t=tool: self._paint_tool(t, hover=False))
             _Tooltip(btn, tip)
             self._tool_btns[tool] = btn
+
+        # --- Nút chọn màu: hình tròn hiển thị màu hiện tại, click mở bảng màu ---
+        swatch = tk.Canvas(
+            frame,
+            width=self.BTN_STYLE["width"],
+            height=self.BTN_STYLE["height"],
+            bd=0,
+            highlightthickness=0,
+            bg="#ffffff",
+            cursor="hand2",
+        )
+        swatch.pack(side="top", pady=1)
+        swatch.bind("<Enter>", lambda e: swatch.configure(bg=self.HOVER_BG))
+        swatch.bind("<Leave>", lambda e: swatch.configure(bg="#ffffff"))
+        swatch.bind("<Button-1>", self._open_color_popup)
+        self._color_swatch = swatch
+        self._draw_swatch()
+        _Tooltip(swatch, "Chọn màu")
 
         # Vạch ngăn cách nằm ngang giữa nhóm tool và nhóm hành động (fill="x", height=1)
         tk.Frame(frame, bg="#d1d5db", height=1).pack(
@@ -221,3 +252,105 @@ class ActionToolbar(tk.Toplevel):
             return
         self.destroy()
         self.on_action(action)
+
+    # ------------------------------------------------------------------
+    # Chọn màu annotation
+    # ------------------------------------------------------------------
+
+    def _draw_swatch(self):
+        if self._color_swatch is None:
+            return
+        c = self._color_swatch
+        c.delete("all")
+        w = self.BTN_STYLE["width"]
+        h = self.BTN_STYLE["height"]
+        pad = 6
+        c.create_oval(
+            pad,
+            pad,
+            w - pad,
+            h - pad,
+            fill=self._current_color,
+            outline="#9ca3af",
+        )
+
+    def _set_color(self, color: str):
+        self._current_color = color
+        self._draw_swatch()
+        if self.on_color:
+            self.on_color(color)
+        self.lift()
+
+    def _open_color_popup(self, _event=None):
+        # Mở thẳng bảng chọn màu đầy đủ của hệ điều hành (đủ màu, không giới hạn palette).
+        # Overlay cha (RegionSelector) fullscreen + topmost sẽ che khuất dialog nếu không
+        # tạm hạ topmost của nó trước khi mở, nên phải hạ cả cha lẫn toolbar rồi bật lại.
+        # Overlay cha cũng giữ grab_set() (modal) — phải nhả grab đó trước khi mở dialog,
+        # nếu không dialog mất tương tác và khi đóng lại, toolbar bị che/không bấm được.
+        parent_win = cast("tk.Toplevel | None", self.master)
+        had_grab = False
+        if parent_win is not None and parent_win.grab_current() == parent_win:
+            had_grab = True
+            parent_win.grab_release()
+
+        self.attributes("-topmost", False)
+        if parent_win is not None:
+            parent_win.attributes("-topmost", False)
+
+        # Chỉnh số này để đẩy dialog lên cao hơn (giá trị càng lớn càng cao)
+        color_dialog_y_offset = 210
+
+        swatch = self._color_swatch
+        target_x = self.winfo_rootx()
+        target_y = self.winfo_rooty()
+        if swatch is not None:
+            target_x = swatch.winfo_rootx() + swatch.winfo_width()
+            target_y = max(0, swatch.winfo_rooty() - color_dialog_y_offset)
+        # Dialog chọn màu là cửa sổ native Windows nên không đặt được vị trí qua
+        # Tk. Poll ngắn để bắt cửa sổ "#32770" vừa mở rồi move bằng Win32 API.
+        self.after(50, lambda: self._reposition_color_dialog(target_x, target_y))
+        try:
+            _rgb, hex_color = colorchooser.askcolor(
+                color=self._current_color, title="Chọn màu", parent=self
+            )
+        finally:
+            if parent_win is not None:
+                parent_win.attributes("-topmost", True)
+            self.attributes("-topmost", True)
+            if had_grab and parent_win is not None:
+                parent_win.grab_set()
+                parent_win.focus_force()
+            self.lift()
+        if hex_color:
+            self._set_color(hex_color)
+
+    def _reposition_color_dialog(self, x: int, y: int, attempts: int = 10):
+        """Tìm cửa sổ dialog "Chọn màu" của Windows vừa mở và di chuyển tới (x, y)."""
+        user32 = ctypes.windll.user32
+        pid = os.getpid()
+        found = None
+
+        def _enum_proc(hwnd, _lparam):
+            nonlocal found
+            window_pid = ctypes.c_ulong()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(window_pid))
+            if window_pid.value != pid or not user32.IsWindowVisible(hwnd):
+                return True
+            buf = ctypes.create_unicode_buffer(256)
+            user32.GetClassNameW(hwnd, buf, 256)
+            if buf.value == _COLOR_DIALOG_CLASS:
+                found = hwnd
+                return False
+            return True
+
+        enum_proc_type = ctypes.WINFUNCTYPE(
+            ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p
+        )
+        user32.EnumWindows(enum_proc_type(_enum_proc), 0)
+
+        if found:
+            user32.SetWindowPos(
+                found, 0, x, y, 0, 0, 0x0001 | 0x0004
+            )  # NOSIZE|NOZORDER
+        elif attempts > 0:
+            self.after(30, lambda: self._reposition_color_dialog(x, y, attempts - 1))
