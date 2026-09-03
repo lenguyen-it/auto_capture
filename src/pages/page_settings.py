@@ -12,6 +12,7 @@ _HOTKEY_FIELDS = [
     ("hotkey_region_capture", "Mở ngay công cụ kéo chọn vùng để chụp"),
     ("hotkey_desktop_capture", "Chụp ngay toàn bộ desktop"),
     ("hotkey_open_desktop_tab", "Mở cửa sổ & chuyển sang tab Chụp Desktop"),
+    ("hotkey_start_record", "Mở tab Ghi Màn Hình & bắt đầu/dừng ghi"),
 ]
 
 
@@ -220,6 +221,116 @@ class PageSettings(tk.Frame):
 
         self._update_image_format_ui()
 
+        section_record = tk.LabelFrame(
+            self,
+            text="Ghi màn hình",
+            font=("Segoe UI", 10, "bold"),
+            bg="#f5f5f5",
+            fg="#1565c0",
+            bd=1,
+            relief="groove",
+        )
+        section_record.pack(fill="x", padx=15, pady=4)
+
+        frame_video_format = tk.Frame(section_record, bg="#f5f5f5")
+        frame_video_format.pack(fill="x", padx=10, pady=(8, 4))
+
+        tk.Label(
+            frame_video_format,
+            text="Định dạng video:",
+            font=("Segoe UI", 10),
+            bg="#f5f5f5",
+        ).pack(side="left")
+
+        self.var_video_format = tk.StringVar(
+            value=self.config_data.get("video_format", "MP4")
+        )
+        cb_video_format = ttk.Combobox(
+            frame_video_format,
+            textvariable=self.var_video_format,
+            values=["MP4", "WEBM", "GIF"],
+            state="readonly",
+            width=8,
+            font=("Segoe UI", 10),
+        )
+        cb_video_format.pack(side="left", padx=5)
+        cb_video_format.bind("<<ComboboxSelected>>", self._on_change_video_format)
+
+        tk.Label(
+            frame_video_format,
+            text="FPS:",
+            font=("Segoe UI", 10),
+            bg="#f5f5f5",
+        ).pack(side="left", padx=(15, 0))
+
+        self.var_video_fps = tk.StringVar(
+            value=str(self.config_data.get("video_fps", 15))
+        )
+        cb_fps = ttk.Combobox(
+            frame_video_format,
+            textvariable=self.var_video_fps,
+            values=["10", "15", "24", "30", "60"],
+            state="readonly",
+            width=4,
+            font=("Segoe UI", 10),
+        )
+        cb_fps.pack(side="left", padx=5)
+        cb_fps.bind("<<ComboboxSelected>>", self._on_change_video_fps)
+
+        row_quality = tk.Frame(section_record, bg="#f5f5f5")
+        row_quality.pack(fill="x", padx=10)
+        tk.Label(
+            row_quality,
+            text="Chất lượng video (CRF):",
+            font=("Segoe UI", 9),
+            bg="#f5f5f5",
+            fg="#555",
+        ).pack(side="left")
+
+        self.var_video_quality = tk.IntVar(
+            value=self.config_data.get("video_quality", 23)
+        )
+        self.lbl_video_quality_value = tk.Label(
+            row_quality,
+            text=str(self.var_video_quality.get()),
+            font=("Segoe UI", 9, "bold"),
+            bg="#f5f5f5",
+            fg="#1565c0",
+        )
+        self.lbl_video_quality_value.pack(side="right")
+        scale_video_quality = ttk.Scale(
+            section_record,
+            from_=0,
+            to=51,
+            orient="horizontal",
+            variable=self.var_video_quality,
+            command=lambda _v: self.lbl_video_quality_value.config(
+                text=str(self.var_video_quality.get())
+            ),
+        )
+        scale_video_quality.pack(fill="x", padx=10)
+        scale_video_quality.bind("<ButtonRelease-1>", self._on_change_video_quality)
+
+        tk.Label(
+            section_record,
+            text="0 = lossless, file rất to   |   51 = chất lượng thấp, file nhỏ",
+            font=("Segoe UI", 8, "italic"),
+            bg="#f5f5f5",
+            fg="#999",
+        ).pack(anchor="w", padx=10, pady=(0, 4))
+
+        self.var_highlight_cursor = tk.BooleanVar(
+            value=self.config_data.get("highlight_cursor", True)
+        )
+        tk.Checkbutton(
+            section_record,
+            text="Làm nổi bật con trỏ và hiệu ứng click",
+            variable=self.var_highlight_cursor,
+            font=("Segoe UI", 10),
+            bg="#f5f5f5",
+            command=self._on_toggle_highlight_cursor,
+        ).pack(anchor="w", padx=10, pady=(2, 8))
+
         section_hotkey = tk.LabelFrame(
             self,
             text="Phím tắt nhanh",
@@ -315,6 +426,22 @@ class PageSettings(tk.Frame):
 
     def _on_change_jpeg_quality(self, _value=None):
         self.config_data["jpeg_quality"] = self.var_jpeg_quality.get()
+        save_config(self.config_data)
+
+    def _on_change_video_format(self, _event=None):
+        self.config_data["video_format"] = self.var_video_format.get()
+        save_config(self.config_data)
+
+    def _on_change_video_fps(self, _event=None):
+        self.config_data["video_fps"] = int(self.var_video_fps.get())
+        save_config(self.config_data)
+
+    def _on_change_video_quality(self, _value=None):
+        self.config_data["video_quality"] = self.var_video_quality.get()
+        save_config(self.config_data)
+
+    def _on_toggle_highlight_cursor(self):
+        self.config_data["highlight_cursor"] = self.var_highlight_cursor.get()
         save_config(self.config_data)
 
     def _current_hotkey_label(self, config_key: str) -> str:

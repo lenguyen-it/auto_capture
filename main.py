@@ -9,11 +9,13 @@ from src.core.global_hotkey import (
     HOTKEY_ID_OPEN_AUTO_TAB,
     HOTKEY_ID_OPEN_DESKTOP_TAB,
     HOTKEY_ID_REGION_CAPTURE,
+    HOTKEY_ID_START_RECORD,
     GlobalHotkeyListener,
 )
 from src.core.tray_icon import TrayIcon
 from src.pages.page_auto_cap_window import PageAuto
 from src.pages.page_desktop import PageDesktop
+from src.pages.page_record import PageRecord
 from src.pages.page_region import PageRegion
 from src.pages.page_settings import PageSettings
 
@@ -97,6 +99,10 @@ def build_app():
     tab_desktop = PageDesktop(notebook, bg="#f5f5f5")
     notebook.add(tab_desktop, text="Chụp Desktop")
 
+    # Tab 4: Ghi màn hình
+    tab_record = PageRecord(notebook, bg="#f5f5f5")
+    notebook.add(tab_record, text="Ghi Màn Hình")
+
     # ---- Khay hệ thống ----
     def show_window():
         root.deiconify()
@@ -137,6 +143,10 @@ def build_app():
         elif hotkey_id == HOTKEY_ID_OPEN_DESKTOP_TAB:
             show_window()
             notebook.select(tab_desktop)
+        elif hotkey_id == HOTKEY_ID_START_RECORD:
+            show_window()
+            notebook.select(tab_record)
+            tab_record._toggle_record()
 
     hotkey_listener = GlobalHotkeyListener(
         on_hotkey=lambda hotkey_id: root.after(0, handle_hotkey, hotkey_id)

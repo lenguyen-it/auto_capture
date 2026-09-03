@@ -25,12 +25,14 @@ HOTKEY_ID_OPEN_AUTO_TAB = 1
 HOTKEY_ID_REGION_CAPTURE = 2
 HOTKEY_ID_DESKTOP_CAPTURE = 3
 HOTKEY_ID_OPEN_DESKTOP_TAB = 4
+HOTKEY_ID_START_RECORD = 5
 
 _CONFIG_KEYS = {
     HOTKEY_ID_OPEN_AUTO_TAB: "hotkey_open_auto_tab",
     HOTKEY_ID_REGION_CAPTURE: "hotkey_region_capture",
     HOTKEY_ID_DESKTOP_CAPTURE: "hotkey_desktop_capture",
     HOTKEY_ID_OPEN_DESKTOP_TAB: "hotkey_open_desktop_tab",
+    HOTKEY_ID_START_RECORD: "hotkey_start_record",
 }
 
 

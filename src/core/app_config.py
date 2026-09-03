@@ -18,6 +18,11 @@ DEFAULTS = {
     "image_format": "PNG",  # "PNG" hoặc "JPEG"
     "png_compress_level": 6,  # 0 (nhanh, file to) - 9 (chậm, file nhỏ) - không mất dữ liệu
     "jpeg_quality": 90,  # 1 (nhẹ, mất nhiều chi tiết) - 100 (nặng, gần như lossless)
+    "video_format": "MP4",  # "MP4", "WEBM" hoặc "GIF"
+    "video_fps": 15,
+    "video_quality": 23,  # CRF: 0 (lossless, file rất to) - 51 (chất lượng thấp, file nhỏ)
+    "highlight_cursor": True,
+    "hotkey_start_record": {"mods": 3, "vk": ord("5")},  # Ctrl+Alt+5
 }
 
 
