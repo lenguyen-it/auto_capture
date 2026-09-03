@@ -8,15 +8,10 @@ from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
 
 from src.core.capture import capture_desktop
-from src.core.scroll_capture import capture_scrolling_window
-from src.core.window_utils import get_all_visible_windows
 
 # ---------------------------------------------------------------------------
 # Tab chụp toàn bộ desktop
 # ---------------------------------------------------------------------------
-
-MODE_FULLSCREEN = "Toàn màn hình"
-MODE_SCROLLING = "Scrolling (trang web dài)"
 
 
 class PageDesktop(tk.Frame):
@@ -28,7 +23,6 @@ class PageDesktop(tk.Frame):
 
         self.save_folder = os.path.abspath("screenshots")
         self.preview_img = None
-        self.windows_data: list[tuple[str, int]] = []
 
         self.is_running = False
         self.schedule_thread = None
@@ -36,64 +30,6 @@ class PageDesktop(tk.Frame):
         self._build_ui()
 
     def _build_ui(self):
-        # ===== Phần 0: Chế độ chụp =====
-        section0 = tk.LabelFrame(
-            self,
-            text="Chế độ chụp",
-            font=("Segoe UI", 10, "bold"),
-            bg="#f5f5f5",
-            fg="#1565c0",
-            bd=1,
-            relief="groove",
-        )
-        section0.pack(fill="x", padx=15, pady=(10, 4))
-
-        frame_mode = tk.Frame(section0, bg="#f5f5f5")
-        frame_mode.pack(fill="x", padx=10, pady=8)
-
-        self.cb_mode = ttk.Combobox(
-            frame_mode,
-            values=[MODE_FULLSCREEN, MODE_SCROLLING],
-            state="readonly",
-            font=("Segoe UI", 10),
-        )
-        self.cb_mode.current(0)
-        self.cb_mode.pack(fill="x")
-        self.cb_mode.bind("<<ComboboxSelected>>", self._on_mode_changed)
-
-        # --- Chọn cửa sổ (chỉ dùng ở chế độ Scrolling) ---
-        self.frame_window_pick = tk.Frame(section0, bg="#f5f5f5")
-
-        tk.Label(
-            self.frame_window_pick,
-            text="Chọn cửa sổ cần chụp (vd. trình duyệt):",
-            font=("Segoe UI", 9),
-            bg="#f5f5f5",
-            fg="#555",
-        ).pack(anchor="w", padx=10)
-
-        frame_cb = tk.Frame(self.frame_window_pick, bg="#f5f5f5")
-        frame_cb.pack(fill="x", padx=10, pady=(2, 8))
-
-        self.lb_windows = tk.Listbox(
-            frame_cb,
-            selectmode="browse",
-            exportselection=False,
-            height=4,
-            font=("Segoe UI", 9),
-        )
-        self.lb_windows.pack(side="left", fill="x", expand=True)
-
-        tk.Button(
-            frame_cb,
-            text="Làm mới",
-            command=self._refresh_windows,
-            font=("Segoe UI", 9),
-            relief="flat",
-            bg="#e0e0e0",
-            cursor="hand2",
-        ).pack(side="right", padx=(5, 0))
-
         # ===== Phần 1: Thư mục lưu =====
         section1 = tk.LabelFrame(
             self,
@@ -145,7 +81,7 @@ class PageDesktop(tk.Frame):
             activebackground="#1b5e20",
             relief="flat",
             cursor="hand2",
-            command=self._on_click_capture_now,
+            command=self._capture_now,
         )
         self.btn_capture_now.pack(fill="x", padx=10, pady=(8, 4))
 
@@ -218,31 +154,6 @@ class PageDesktop(tk.Frame):
         self.lbl_preview.pack(fill="both", expand=True, padx=8, pady=8)
         self.lbl_preview.bind("<Button-1>", self._open_last_image)
 
-        self._on_mode_changed()
-
-    def _on_mode_changed(self, _event=None):
-        if self.cb_mode.get() == MODE_SCROLLING:
-            self.frame_window_pick.pack(fill="x")
-            self._refresh_windows()
-            self.btn_capture_now.config(text="CHỤP SCROLLING")
-        else:
-            self.frame_window_pick.pack_forget()
-            self.btn_capture_now.config(text="CHỤP NGAY")
-
-    def _refresh_windows(self):
-        self.windows_data = get_all_visible_windows()
-        self.lb_windows.delete(0, tk.END)
-        for title, _ in self.windows_data:
-            self.lb_windows.insert(tk.END, title)
-        if self.windows_data:
-            self.lb_windows.selection_set(0)
-
-    def _on_click_capture_now(self):
-        if self.cb_mode.get() == MODE_SCROLLING:
-            self._capture_scrolling()
-        else:
-            self._capture_now()
-
     def _capture_now(self):
         folder = self.entry_folder.get().strip()
         os.makedirs(folder, exist_ok=True)
@@ -259,61 +170,6 @@ class PageDesktop(tk.Frame):
                 )
 
         threading.Thread(target=do_capture, daemon=True).start()
-
-    def _capture_scrolling(self):
-        selection = self.lb_windows.curselection()
-        if not selection:
-            messagebox.showwarning(
-                "Cảnh báo", "Vui lòng chọn một cửa sổ để chụp scrolling!"
-            )
-            return
-
-        _title, hwnd = self.windows_data[selection[0]]
-        folder = self.entry_folder.get().strip()
-        os.makedirs(folder, exist_ok=True)
-
-        self.btn_capture_now.config(state="disabled")
-        self.lbl_status.config(text="Đang cuộn & chụp...", fg="#e65100")
-
-        def on_progress(count):
-            self.after(
-                0,
-                lambda: self.lbl_status.config(
-                    text=f"Đang cuộn & chụp... (đoạn {count})", fg="#e65100"
-                ),
-            )
-
-        def do_capture():
-            path = capture_scrolling_window(
-                hwnd, folder, "desktop_scroll", on_progress=on_progress
-            )
-            self.after(0, lambda: self.btn_capture_now.config(state="normal"))
-            if path:
-                self.after(0, lambda: self._show_preview(path))
-                self.after(
-                    0,
-                    lambda: self.lbl_status.config(
-                        text=f"Đã chụp: {os.path.basename(path)}", fg="#2e7d32"
-                    ),
-                )
-            else:
-                self.after(
-                    0,
-                    lambda: self.lbl_status.config(
-                        text="Chụp scrolling thất bại", fg="#e53935"
-                    ),
-                )
-            # Cửa sổ target đã được đưa lên foreground để chụp -> đưa app
-            # trở lại lên trước màn hình sau khi chụp & lưu xong.
-            self.after(0, self._restore_app_window)
-
-        threading.Thread(target=do_capture, daemon=True).start()
-
-    def _restore_app_window(self):
-        top = self.winfo_toplevel()
-        top.deiconify()
-        top.lift()
-        top.focus_force()
 
     def _toggle_schedule(self):
         if self.is_running:
